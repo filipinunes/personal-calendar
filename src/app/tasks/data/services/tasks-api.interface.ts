@@ -1,12 +1,14 @@
 import { Observable } from 'rxjs';
 import { Task } from '../models/task.model';
 
+export interface TasksApiFilters {
+  search?: string;
+  statuses?: string[];
+  dateRange?: { start: string; end: string };
+}
+
 export interface TasksApi {
-  getTasks(filters?: {
-    search?: string;
-    statuses?: string[];
-    dateRange?: { start: string; end: string };
-  }): Observable<Task[]>;
+  getTasks(filters?: TasksApiFilters): Observable<Task[]>;
 
   createTask(task: Omit<Task, 'id'>): Observable<Task>;
 
