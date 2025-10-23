@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
+import { v4 as uuid } from 'uuid';
 import { Task } from '../models/task.model';
 import { TasksApi, TasksApiFilters } from './tasks-api.interface';
 
@@ -46,7 +47,7 @@ export class TasksService implements TasksApi {
   }
 
   createTask(task: Omit<Task, 'id'>): Observable<Task> {
-    return this.http.post<Task>(this.apiUrl, task);
+    return this.http.post<Task>(this.apiUrl, { ...task, id: uuid() });
   }
 
   updateTask(id: string, task: Partial<Task>): Observable<Task> {

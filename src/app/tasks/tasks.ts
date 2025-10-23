@@ -1,52 +1,135 @@
-import { Component, inject, ViewChild } from '@angular/core';
-import { FormControl, FormGroup } from '@angular/forms';
+import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, inject, signal, ViewChild } from '@angular/core';
+import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { MatIcon } from '@angular/material/icon';
+import { MatFormField, MatInput, MatLabel } from '@angular/material/input';
 import { MatPaginator } from '@angular/material/paginator';
-import { MatTableDataSource } from '@angular/material/table';
-import { PeriodicElement, TasksService } from './data/tasks.service';
-import { Observable, tap } from 'rxjs';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatTableDataSource, MatTableModule } from '@angular/material/table';
+import {
+  BehaviorSubject,
+  combineLatest,
+  debounceTime,
+  distinctUntilChanged,
+  first,
+  Observable,
+  startWith,
+  switchMap,
+} from 'rxjs';
+import { StatusPipe } from '../shared/pipes/status-pipe';
+import { Task } from './data/models/task.model';
+import { TasksService } from './data/services/tasks.service';
+import { MatButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { AddTaskDialog } from './components/add-task-dialog/add-task-dialog';
 
 @Component({
   selector: 'app-tasks',
   templateUrl: './tasks.html',
   styleUrl: './tasks.css',
-  standalone: false,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatInput,
+    MatFormField,
+    MatLabel,
+    MatIcon,
+    MatProgressSpinner,
+    MatTableModule,
+    MatPaginator,
+    StatusPipe,
+    MatButton,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Tasks {
-  displayedColumns: string[] = ['title', 'status', 'date', 'description', 'action'];
-  dataSource!: MatTableDataSource<PeriodicElement>;
-  form!: FormGroup;
-  tasks$!: Observable<PeriodicElement[]>;
+  readonly displayedColumns: string[] = ['title', 'status', 'date', 'description'];
 
-  tasksService = inject(TasksService);
+  tasks$!: Observable<Task[]>;
+  isLoading = signal(false);
+  hasError = signal(false);
+  dataSource = signal(new MatTableDataSource<Task>([]));
+
+  form: FormGroup;
+
+  readonly tasksService = inject(TasksService);
+  readonly dialog = inject(MatDialog);
+
+  newTask$ = new BehaviorSubject<Task | null>(null);
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  constructor() {}
-
-  ngOnInit() {
+  constructor() {
     this.form = new FormGroup({
       search: new FormControl(''),
+      dateRange: new FormGroup({
+        from: new FormControl(''),
+        to: new FormControl(''),
+      }),
+      statuses: new FormControl(''),
     });
   }
 
+  ngOnInit() {
+    this.setTasksListener();
+    this.setTableDataSourceListener();
+  }
+
   ngAfterViewInit() {
-    this.tasks$ = this.tasksService.getTasks().pipe(
-      tap((tasks) => {
-        this.dataSource = new MatTableDataSource(tasks);
-        this.dataSource.paginator = this.paginator;
-      })
+    this.dataSource().paginator = this.paginator;
+  }
+
+  openDialog(): void {
+    const dialogRef = this.dialog.open(AddTaskDialog);
+
+    dialogRef.afterClosed().subscribe((payload) => {
+      if (payload) {
+        this.addTask(payload);
+      }
+    });
+  }
+
+  private setTasksListener() {
+    const searchChanges$ = this.form.controls?.['search'].valueChanges.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      startWith(this.form.controls?.['search'].value)
     );
+    const dateRangeChanges$ = this.form.controls?.['dateRange'].valueChanges.pipe(
+      startWith(this.form.controls?.['dateRange'].value)
+    );
+    const statusesChanges$ = this.form.controls?.['statuses'].valueChanges.pipe(
+      startWith(this.form.controls?.['statuses'].value)
+    );
+
+    this.tasks$ = combineLatest([
+      searchChanges$,
+      dateRangeChanges$,
+      statusesChanges$,
+      this.newTask$,
+    ]).pipe(switchMap(([search]) => this.tasksService.getTasks({ search: search as string })));
   }
 
-  deleteTask(e: any) {
-    console.log('delete: ', e);
+  private setTableDataSourceListener(): void {
+    this.tasks$.subscribe((tasks) => {
+      this.dataSource.update((dataSource) => {
+        dataSource.data = tasks;
+
+        return dataSource;
+      });
+    });
   }
 
-  concludeTask(e: any) {
-    console.log('conclude: ', e);
+  private addTask(payload: Omit<Task, 'id'>) {
+    this.tasksService
+      .createTask(payload)
+      .pipe(first())
+      .subscribe((task) => {
+        this.newTask$.next(task);
+      });
   }
 
   get searchControl(): FormControl {
-    return this.form.get('search') as FormControl;
+    return this.form.controls?.['search'] as FormControl;
   }
 }

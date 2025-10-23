@@ -1,0 +1,34 @@
+<h2 mat-dialog-title class="text-center">Adicionar Tarefa</h2>
+<mat-dialog-content>
+  <form class="flex flex-col px-10" [formGroup]="form">
+    <mat-form-field>
+      <mat-label>Título</mat-label>
+      <input matInput required [formControl]="titleControl" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Status</mat-label>
+      <mat-select required [formControl]="statusControl">
+        <mat-option value="PENDING">Pendente</mat-option>
+        <mat-option value="IN_PROGRESS">Em andamento</mat-option>
+        <mat-option value="DONE">Concluído</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Data de execução</mat-label>
+      <input matInput [matDatepicker]="picker" [formControl]="dateControl" />
+      <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+      <mat-datepicker #picker></mat-datepicker>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Descrição</mat-label>
+      <textarea matInput [formControl]="descriptionControl"></textarea>
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+<mat-dialog-actions>
+  <button matButton (click)="onNoClick()">No Thanks</button>
+  <button matButton [mat-dialog-close]="this.form.value" [disabled]="!form.valid">Ok</button>
+</mat-dialog-actions>
