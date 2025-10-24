@@ -1,12 +1,14 @@
-import { Component, inject, signal, WritableSignal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import {
   FormControl,
   FormGroup,
   FormsModule,
-  Validators,
   ReactiveFormsModule,
+  Validators,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { provideNativeDateAdapter } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import {
   MatDialogActions,
   MatDialogClose,
@@ -17,8 +19,6 @@ import {
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 
 @Component({
   selector: 'app-add-task-dialog',
@@ -40,35 +40,32 @@ import { provideNativeDateAdapter } from '@angular/material/core';
   styleUrl: './add-task-dialog.css',
 })
 export class AddTaskDialog {
-  form: FormGroup;
   readonly dialogRef = inject(MatDialogRef<AddTaskDialog>);
 
-  constructor() {
-    this.form = new FormGroup({
-      title: new FormControl('', Validators.required),
-      date: new FormControl('', Validators.required),
-      status: new FormControl('', Validators.required),
-      description: new FormControl(''),
-    });
-  }
+  form = new FormGroup({
+    title: new FormControl('', Validators.required),
+    date: new FormControl('', Validators.required),
+    status: new FormControl('', Validators.required),
+    description: new FormControl(''),
+  });
 
   onNoClick(): void {
     this.dialogRef.close();
   }
 
-  get titleControl(): FormControl {
-    return this.form.controls?.['title'] as FormControl;
+  get titleControl() {
+    return this.form.controls.title;
   }
 
-  get dateControl(): FormControl {
-    return this.form.controls?.['date'] as FormControl;
+  get dateControl() {
+    return this.form.controls.date;
   }
 
-  get statusControl(): FormControl {
-    return this.form.controls?.['status'] as FormControl;
+  get statusControl() {
+    return this.form.controls.status;
   }
 
-  get descriptionControl(): FormControl {
-    return this.form.controls?.['description'] as FormControl;
+  get descriptionControl() {
+    return this.form.controls.description;
   }
 }
