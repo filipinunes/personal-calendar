@@ -2,9 +2,9 @@ import { Observable } from 'rxjs';
 import { Task } from '../models/task.model';
 
 export interface TasksApiFilters {
-  search?: string;
-  statuses?: string[];
-  dateRange?: { start: string; end: string };
+  search?: string | null;
+  statuses?: string[] | null;
+  dateRange?: { start?: string; end?: string };
 }
 
 export interface TasksApi {

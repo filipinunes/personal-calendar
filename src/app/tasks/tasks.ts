@@ -1,27 +1,30 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal, ViewChild } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { MatButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatInput, MatLabel } from '@angular/material/input';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import {
   BehaviorSubject,
   combineLatest,
   debounceTime,
   distinctUntilChanged,
+  finalize,
   first,
   Observable,
   startWith,
   switchMap,
 } from 'rxjs';
 import { StatusPipe } from '../shared/pipes/status-pipe';
-import { Task } from './data/models/task.model';
-import { TasksService } from './data/services/tasks.service';
-import { MatButton } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
 import { AddTaskDialog } from './components/add-task-dialog/add-task-dialog';
+import { DateFilterDialog } from './components/date-filter-dialog/date-filter-dialog';
+import { Task, TaskStatus } from './data/models/task.model';
+import { TasksService } from './data/services/tasks.service';
 
 @Component({
   selector: 'app-tasks',
@@ -39,36 +42,36 @@ import { AddTaskDialog } from './components/add-task-dialog/add-task-dialog';
     MatPaginator,
     StatusPipe,
     MatButton,
+    MatSelectModule,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Tasks {
-  readonly displayedColumns: string[] = ['title', 'status', 'date', 'description'];
+  readonly displayedColumns: string[] = ['title', 'status', 'date', 'description', 'actions'];
+  readonly statuses: { label: string; value: TaskStatus }[] = [
+    { label: 'Pendente', value: 'PENDING' },
+    { label: 'Em andamento', value: 'IN_PROGRESS' },
+    { label: 'Concluída', value: 'DONE' },
+  ];
+  readonly tasksService = inject(TasksService);
+  readonly dialog = inject(MatDialog);
 
-  tasks$!: Observable<Task[]>;
   isLoading = signal(false);
   hasError = signal(false);
   dataSource = signal(new MatTableDataSource<Task>([]));
 
-  form: FormGroup;
+  form = new FormGroup({
+    search: new FormControl(''),
+    statuses: new FormControl<string[]>([]),
+  });
 
-  readonly tasksService = inject(TasksService);
-  readonly dialog = inject(MatDialog);
-
-  newTask$ = new BehaviorSubject<Task | null>(null);
+  tasks$: Observable<Task[]>;
+  tasksChanged$ = new BehaviorSubject<void>(undefined);
+  dateRange$ = new BehaviorSubject<{ from: string; to: string } | null>(null);
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  constructor() {
-    this.form = new FormGroup({
-      search: new FormControl(''),
-      dateRange: new FormGroup({
-        from: new FormControl(''),
-        to: new FormControl(''),
-      }),
-      statuses: new FormControl(''),
-    });
-  }
+  constructor() {}
 
   ngOnInit() {
     this.setTasksListener();
@@ -79,7 +82,7 @@ export class Tasks {
     this.dataSource().paginator = this.paginator;
   }
 
-  openDialog(): void {
+  openAddTaskDialog(): void {
     const dialogRef = this.dialog.open(AddTaskDialog);
 
     dialogRef.afterClosed().subscribe((payload) => {
@@ -89,34 +92,75 @@ export class Tasks {
     });
   }
 
+  openDateFilterDialog(): void {
+    const dialogRef = this.dialog.open(DateFilterDialog, { data: this.dateRange$.getValue() });
+
+    dialogRef.afterClosed().subscribe((payload) => {
+      this.applyDateFilter(payload);
+    });
+  }
+
+  deleteTask(taskId: string): void {
+    this.isLoading.update(() => true);
+
+    this.tasksService
+      .deleteTask(taskId)
+      .pipe(finalize(() => this.isLoading.update(() => false)))
+      .subscribe({
+        next: () => {
+          this.tasksChanged$.next();
+        },
+        error: () => this.hasError.update(() => true),
+      });
+  }
+
+  editTask(taskId: string): void {
+    console.log('edit: ', taskId);
+  }
+
   private setTasksListener() {
-    const searchChanges$ = this.form.controls?.['search'].valueChanges.pipe(
+    const searchChanges$ = this.searchControl.valueChanges.pipe(
       debounceTime(300),
       distinctUntilChanged(),
-      startWith(this.form.controls?.['search'].value)
+      startWith(this.searchControl.value)
     );
-    const dateRangeChanges$ = this.form.controls?.['dateRange'].valueChanges.pipe(
-      startWith(this.form.controls?.['dateRange'].value)
-    );
-    const statusesChanges$ = this.form.controls?.['statuses'].valueChanges.pipe(
-      startWith(this.form.controls?.['statuses'].value)
+
+    const statusesChanges$ = this.statusesControl.valueChanges.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      startWith(this.statusesControl.value)
     );
 
     this.tasks$ = combineLatest([
       searchChanges$,
-      dateRangeChanges$,
       statusesChanges$,
-      this.newTask$,
-    ]).pipe(switchMap(([search]) => this.tasksService.getTasks({ search: search as string })));
+      this.dateRange$.asObservable(),
+      this.tasksChanged$.asObservable(),
+    ]).pipe(
+      switchMap(([search, statuses, dateRangeValue]) => {
+        const dateRange = { start: dateRangeValue?.from, end: dateRangeValue?.to };
+
+        this.isLoading.update(() => true);
+
+        return this.tasksService
+          .getTasks({ search, statuses, dateRange })
+          .pipe(finalize(() => this.isLoading.update(() => false)));
+      })
+    );
   }
 
   private setTableDataSourceListener(): void {
-    this.tasks$.subscribe((tasks) => {
-      this.dataSource.update((dataSource) => {
-        dataSource.data = tasks;
+    this.tasks$.subscribe({
+      next: (tasks) => {
+        this.dataSource.update((dataSource) => {
+          dataSource.data = tasks;
 
-        return dataSource;
-      });
+          return dataSource;
+        });
+      },
+      error: () => {
+        this.hasError.update(() => true);
+      },
     });
   }
 
@@ -124,12 +168,20 @@ export class Tasks {
     this.tasksService
       .createTask(payload)
       .pipe(first())
-      .subscribe((task) => {
-        this.newTask$.next(task);
+      .subscribe(() => {
+        this.tasksChanged$.next();
       });
   }
 
-  get searchControl(): FormControl {
-    return this.form.controls?.['search'] as FormControl;
+  private applyDateFilter(payload: { from: Date; to: Date }): void {
+    this.dateRange$.next({ from: payload.from.toISOString(), to: payload.to.toISOString() });
+  }
+
+  get searchControl() {
+    return this.form.controls.search;
+  }
+
+  get statusesControl() {
+    return this.form.controls.statuses;
   }
 }
