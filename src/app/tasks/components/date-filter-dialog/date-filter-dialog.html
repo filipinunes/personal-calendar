@@ -1,0 +1,19 @@
+<h2 mat-dialog-title class="text-center">Filtrar por data</h2>
+<mat-dialog-content>
+  <form class="flex flex-col px-10" [formGroup]="form">
+    <mat-form-field>
+      <mat-label>Selecione um intervalo</mat-label>
+      <mat-date-range-input [rangePicker]="picker">
+        <input [formControl]="fromControl" matStartDate placeholder="Início" />
+        <input [formControl]="toControl" matEndDate placeholder="Fim" />
+      </mat-date-range-input>
+      <mat-hint>MM/DD/YYYY – MM/DD/YYYY</mat-hint>
+      <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+      <mat-date-range-picker #picker></mat-date-range-picker>
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+<mat-dialog-actions>
+  <button matButton (click)="onNoClick()">Cancelar</button>
+  <button matButton [mat-dialog-close]="this.form.value" [disabled]="!form.valid">Confirmar</button>
+</mat-dialog-actions>
