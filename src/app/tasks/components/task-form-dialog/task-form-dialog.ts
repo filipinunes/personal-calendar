@@ -15,13 +15,15 @@ import {
   MatDialogContent,
   MatDialogRef,
   MatDialogTitle,
+  MAT_DIALOG_DATA,
 } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { Task } from '../../data/models/task.model';
 
 @Component({
-  selector: 'app-add-task-dialog',
+  selector: 'app-task-form-dialog',
   imports: [
     MatFormFieldModule,
     MatInputModule,
@@ -36,11 +38,12 @@ import { MatSelectModule } from '@angular/material/select';
     MatDatepickerModule,
   ],
   providers: [provideNativeDateAdapter()],
-  templateUrl: './add-task-dialog.html',
-  styleUrl: './add-task-dialog.css',
+  templateUrl: './task-form-dialog.html',
+  styleUrl: './task-form-dialog.css',
 })
-export class AddTaskDialog {
-  readonly dialogRef = inject(MatDialogRef<AddTaskDialog>);
+export class TaskFormDialog {
+  readonly dialogRef = inject(MatDialogRef<TaskFormDialog>);
+  readonly data = inject<Task>(MAT_DIALOG_DATA);
 
   form = new FormGroup({
     title: new FormControl('', Validators.required),
@@ -48,6 +51,18 @@ export class AddTaskDialog {
     status: new FormControl('', Validators.required),
     description: new FormControl(''),
   });
+
+  constructor() {
+    if (this.data) {
+      this.titleControl.patchValue(this.data.title);
+      this.dateControl.patchValue(this.data.date);
+      this.statusControl.patchValue(this.data.status);
+
+      if (this.data.description) {
+        this.descriptionControl.patchValue(this.data.description);
+      }
+    }
+  }
 
   onNoClick(): void {
     this.dialogRef.close();

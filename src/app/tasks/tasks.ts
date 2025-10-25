@@ -2,6 +2,8 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal, ViewChild } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
+import { provideNativeDateAdapter } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatInput, MatLabel } from '@angular/material/input';
@@ -14,15 +16,16 @@ import {
   combineLatest,
   debounceTime,
   distinctUntilChanged,
+  filter,
   finalize,
   first,
+  map,
   Observable,
   startWith,
   switchMap,
 } from 'rxjs';
 import { StatusPipe } from '../shared/pipes/status-pipe';
-import { AddTaskDialog } from './components/add-task-dialog/add-task-dialog';
-import { DateFilterDialog } from './components/date-filter-dialog/date-filter-dialog';
+import { TaskFormDialog } from './components/task-form-dialog/task-form-dialog';
 import { Task, TaskStatus } from './data/models/task.model';
 import { TasksService } from './data/services/tasks.service';
 
@@ -43,7 +46,9 @@ import { TasksService } from './data/services/tasks.service';
     StatusPipe,
     MatButton,
     MatSelectModule,
+    MatDatepickerModule,
   ],
+  providers: [provideNativeDateAdapter()],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Tasks {
@@ -63,11 +68,14 @@ export class Tasks {
   form = new FormGroup({
     search: new FormControl(''),
     statuses: new FormControl<string[]>([]),
+    dateRange: new FormGroup({
+      start: new FormControl(''),
+      end: new FormControl(''),
+    }),
   });
 
   tasks$: Observable<Task[]>;
   tasksChanged$ = new BehaviorSubject<void>(undefined);
-  dateRange$ = new BehaviorSubject<{ from: string; to: string } | null>(null);
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -83,20 +91,12 @@ export class Tasks {
   }
 
   openAddTaskDialog(): void {
-    const dialogRef = this.dialog.open(AddTaskDialog);
+    const dialogRef = this.dialog.open(TaskFormDialog);
 
     dialogRef.afterClosed().subscribe((payload) => {
       if (payload) {
         this.addTask(payload);
       }
-    });
-  }
-
-  openDateFilterDialog(): void {
-    const dialogRef = this.dialog.open(DateFilterDialog, { data: this.dateRange$.getValue() });
-
-    dialogRef.afterClosed().subscribe((payload) => {
-      this.applyDateFilter(payload);
     });
   }
 
@@ -114,8 +114,14 @@ export class Tasks {
       });
   }
 
-  editTask(taskId: string): void {
-    console.log('edit: ', taskId);
+  opeEditTaskDialog(task: Task): void {
+    const dialogRef = this.dialog.open(TaskFormDialog, { data: task });
+
+    dialogRef.afterClosed().subscribe((payload) => {
+      if (payload) {
+        this.editTask({ ...payload, id: task.id });
+      }
+    });
   }
 
   private setTasksListener() {
@@ -127,19 +133,22 @@ export class Tasks {
 
     const statusesChanges$ = this.statusesControl.valueChanges.pipe(
       debounceTime(300),
-      distinctUntilChanged(),
       startWith(this.statusesControl.value)
+    );
+
+    const dateRangeChanges$ = this.endDateControl.valueChanges.pipe(
+      filter((value) => !!value),
+      map(() => this.dateRangeControl.value),
+      startWith(this.dateRangeControl.value)
     );
 
     this.tasks$ = combineLatest([
       searchChanges$,
       statusesChanges$,
-      this.dateRange$.asObservable(),
+      dateRangeChanges$,
       this.tasksChanged$.asObservable(),
     ]).pipe(
-      switchMap(([search, statuses, dateRangeValue]) => {
-        const dateRange = { start: dateRangeValue?.from, end: dateRangeValue?.to };
-
+      switchMap(([search, statuses, dateRange]) => {
         this.isLoading.update(() => true);
 
         return this.tasksService
@@ -168,13 +177,27 @@ export class Tasks {
     this.tasksService
       .createTask(payload)
       .pipe(first())
-      .subscribe(() => {
-        this.tasksChanged$.next();
+      .subscribe({
+        next: () => {
+          this.tasksChanged$.next();
+        },
+        error: () => this.hasError.update(() => true),
       });
   }
 
-  private applyDateFilter(payload: { from: Date; to: Date }): void {
-    this.dateRange$.next({ from: payload.from.toISOString(), to: payload.to.toISOString() });
+  private editTask(payload: Task): void {
+    this.tasksService
+      .updateTask(payload.id, payload)
+      .pipe(first())
+      .subscribe({
+        next: () => {
+          this.tasksChanged$.next();
+        },
+        error: (err) => {
+          console.log(err);
+          this.hasError.update(() => true);
+        },
+      });
   }
 
   get searchControl() {
@@ -183,5 +206,17 @@ export class Tasks {
 
   get statusesControl() {
     return this.form.controls.statuses;
+  }
+
+  get dateRangeControl() {
+    return this.form.controls.dateRange;
+  }
+
+  get startDateControl() {
+    return this.form.controls.dateRange.controls.start;
+  }
+
+  get endDateControl() {
+    return this.form.controls.dateRange.controls.end;
   }
 }

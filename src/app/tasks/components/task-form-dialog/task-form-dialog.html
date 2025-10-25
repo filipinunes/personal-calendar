@@ -29,6 +29,6 @@
   </form>
 </mat-dialog-content>
 <mat-dialog-actions>
-  <button matButton (click)="onNoClick()">No Thanks</button>
-  <button matButton [mat-dialog-close]="this.form.value" [disabled]="!form.valid">Ok</button>
+  <button matButton (click)="onNoClick()">Cancelar</button>
+  <button matButton [mat-dialog-close]="this.form.value" [disabled]="!form.valid">Confirmar</button>
 </mat-dialog-actions>

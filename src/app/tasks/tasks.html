@@ -1,72 +1,91 @@
-<div class="p-4 space-y-4">
-  <mat-form-field class="w-full">
-    <mat-label>Buscar por título</mat-label>
-    <input matInput placeholder="Digite o título..." [formControl]="searchControl" />
-    <mat-icon matSuffix>search</mat-icon>
-  </mat-form-field>
+<div class="p-4 flex flex-col gap-4">
+  <button class="self-end" matButton (click)="openAddTaskDialog()">
+    <mat-icon>add</mat-icon>Adicionar Tarefa
+  </button>
 
-  <button matButton (click)="openAddTaskDialog()">Adicionar Tarefa</button>
-  <button matButton (click)="openDateFilterDialog()">Filtar por data</button>
+  <div class="flex flex-col sm:flex-row sm:gap-6 items-center justify-center">
+    <mat-form-field class="w-full sm:flex-1">
+      <mat-label>Buscar por título</mat-label>
+      <input matInput placeholder="Digite o título..." [formControl]="searchControl" />
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
 
-  <mat-form-field outline>
-    <mat-label>Status</mat-label>
-    <mat-select [formControl]="statusesControl" multiple>
-      @for (status of statuses; track status) {
-      <mat-option [value]="status.value">{{ status.label }}</mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
+    <mat-form-field class="max-sm:w-full" outline>
+      <mat-label>Status</mat-label>
+      <mat-select [formControl]="statusesControl" multiple>
+        @for (status of statuses; track status) {
+        <mat-option [value]="status.value">{{ status.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
 
-  @if(isLoading()) {
-  <div class="flex justify-center items-center h-40">
-    <mat-spinner diameter="40"></mat-spinner>
+    <mat-form-field>
+      <mat-label>Selecione um intervalo</mat-label>
+      <mat-date-range-input [rangePicker]="picker">
+        <input [formControl]="startDateControl" matStartDate placeholder="Início" />
+        <input [formControl]="endDateControl" matEndDate placeholder="Fim" />
+      </mat-date-range-input>
+      <mat-hint>MM/DD/YYYY – MM/DD/YYYY</mat-hint>
+      <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+      <mat-date-range-picker #picker></mat-date-range-picker>
+    </mat-form-field>
   </div>
-  } @if(hasError()) {
-  <div class="text-red-600 text-center">Ocorreu um erro ao carregar as tarefas.</div>
-  } @if(!isLoading() && !hasError() && dataSource().data.length === 0) {
-  <div class="text-gray-500 text-center">Nenhuma tarefa encontrada.</div>
-  } @if(!isLoading() && dataSource().data.length !== 0) {
-  <table mat-table [dataSource]="dataSource()">
-    <ng-container matColumnDef="title">
-      <th mat-header-cell *matHeaderCellDef>Título</th>
-      <td mat-cell *matCellDef="let element">{{ element.title }}</td>
-    </ng-container>
 
-    <ng-container matColumnDef="status">
-      <th mat-header-cell *matHeaderCellDef>Status</th>
-      <td mat-cell *matCellDef="let element">{{ element.status | status }}</td>
-    </ng-container>
+  <main class="min-h-80 flex items-center justify-center">
+    @if(isLoading() && !hasError()) {
+    <div class="flex justify-center items-center h-40">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+    } @if(hasError()) {
+    <div class="text-red-600 text-center">Ocorreu um erro ao carregar as tarefas.</div>
+    } @if(!isLoading() && !hasError() && dataSource().data.length === 0) {
+    <div class="text-gray-500 text-center">Nenhuma tarefa encontrada.</div>
+    } @if(!isLoading() && dataSource().data.length !== 0) {
+    <table mat-table [dataSource]="dataSource()">
+      <ng-container matColumnDef="title">
+        <th mat-header-cell *matHeaderCellDef>Título</th>
+        <td mat-cell *matCellDef="let element">{{ element.title }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="date">
-      <th mat-header-cell *matHeaderCellDef>Data</th>
-      <td mat-cell *matCellDef="let element">{{ element.date | date }}</td>
-    </ng-container>
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let element">{{ element.status | status }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="description">
-      <th mat-header-cell *matHeaderCellDef>Descrição</th>
-      <td mat-cell *matCellDef="let element">{{ element.description }}</td>
-    </ng-container>
+      <ng-container matColumnDef="date">
+        <th mat-header-cell *matHeaderCellDef>Data</th>
+        <td mat-cell *matCellDef="let element">{{ element.date | date }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="actions">
-      <th mat-header-cell *matHeaderCellDef>Ação</th>
-      <td mat-cell *matCellDef="let element">
-        <div class="flex gap-3">
-          <div class="hover:text-red-400">
-            <mat-icon class="hover:cursor-pointer" (click)="deleteTask(element.id)"
-              >delete</mat-icon
-            >
+      <ng-container matColumnDef="description">
+        <th mat-header-cell *matHeaderCellDef>Descrição</th>
+        <td mat-cell *matCellDef="let element">{{ element.description }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>Ação</th>
+        <td mat-cell *matCellDef="let element">
+          <div class="flex gap-3">
+            <div class="hover:text-red-400">
+              <mat-icon class="hover:cursor-pointer" (click)="deleteTask(element.id)"
+                >delete</mat-icon
+              >
+            </div>
+            <div class="hover:text-green-400">
+              <mat-icon class="hover:cursor-pointer" (click)="opeEditTaskDialog(element)"
+                >edit</mat-icon
+              >
+            </div>
           </div>
-          <div class="hover:text-green-400">
-            <mat-icon class="hover:cursor-pointer" (click)="editTask(element.id)">edit</mat-icon>
-          </div>
-        </div>
-      </td>
-    </ng-container>
+        </td>
+      </ng-container>
 
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-  </table>
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+    </table>
 
-  }
+    }
+  </main>
+
   <mat-paginator [pageSizeOptions]="[5, 10, 20]" showFirstLastButtons> </mat-paginator>
 </div>
