@@ -32,15 +32,15 @@
   </div>
 
   <main class="min-h-80 flex items-center justify-center">
-    @if(isLoading() && !hasError()) {
+    @if((isLoading$ | async) && !(hasError$ | async)) {
     <div class="flex justify-center items-center h-40">
       <mat-spinner diameter="40"></mat-spinner>
     </div>
-    } @if(hasError()) {
+    } @if((hasError$ | async)) {
     <div class="text-red-600 text-center">Ocorreu um erro ao carregar as tarefas.</div>
-    } @if(!isLoading() && !hasError() && dataSource().data.length === 0) {
+    } @if(!(isLoading$ | async) && !(hasError$ | async)) { @if(dataSource().data.length === 0) {
     <div class="text-gray-500 text-center">Nenhuma tarefa encontrada.</div>
-    } @if(!isLoading() && dataSource().data.length !== 0) {
+    } @else {
     <table mat-table [dataSource]="dataSource()">
       <ng-container matColumnDef="title">
         <th mat-header-cell *matHeaderCellDef>Título</th>
@@ -84,7 +84,7 @@
       <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
     </table>
 
-    }
+    } }
   </main>
 
   <mat-paginator [pageSizeOptions]="[5, 10, 20]" showFirstLastButtons> </mat-paginator>

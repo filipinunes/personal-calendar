@@ -11,23 +11,13 @@ import { MatPaginator } from '@angular/material/paginator';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
-import {
-  BehaviorSubject,
-  combineLatest,
-  debounceTime,
-  distinctUntilChanged,
-  filter,
-  finalize,
-  first,
-  map,
-  Observable,
-  startWith,
-  switchMap,
-} from 'rxjs';
+import { Store } from '@ngrx/store';
+import { combineLatest, debounceTime, distinctUntilChanged, filter, map, startWith } from 'rxjs';
 import { StatusPipe } from '../shared/pipes/status-pipe';
 import { TaskFormDialog } from './components/task-form-dialog/task-form-dialog';
 import { Task, TaskStatus } from './data/models/task.model';
-import { TasksService } from './data/services/tasks.service';
+import * as TasksActions from './store/tasks.actions';
+import * as TasksSelectors from './store/tasks.selectors';
 
 @Component({
   selector: 'app-tasks',
@@ -52,18 +42,15 @@ import { TasksService } from './data/services/tasks.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Tasks {
+  readonly dialog = inject(MatDialog);
+  readonly store = inject(Store);
+
   readonly displayedColumns: string[] = ['title', 'status', 'date', 'description', 'actions'];
   readonly statuses: { label: string; value: TaskStatus }[] = [
     { label: 'Pendente', value: 'PENDING' },
     { label: 'Em andamento', value: 'IN_PROGRESS' },
     { label: 'Concluída', value: 'DONE' },
   ];
-  readonly tasksService = inject(TasksService);
-  readonly dialog = inject(MatDialog);
-
-  isLoading = signal(false);
-  hasError = signal(false);
-  dataSource = signal(new MatTableDataSource<Task>([]));
 
   form = new FormGroup({
     search: new FormControl(''),
@@ -74,14 +61,18 @@ export class Tasks {
     }),
   });
 
-  tasks$: Observable<Task[]>;
-  tasksChanged$ = new BehaviorSubject<void>(undefined);
+  tasks$ = this.store.select(TasksSelectors.selectAllTasks);
+  isLoading$ = this.store.select(TasksSelectors.selectLoading);
+  hasError$ = this.store.select(TasksSelectors.selectError);
+  isOutdated$ = this.store.select(TasksSelectors.selectOutdated);
+  dataSource = signal(new MatTableDataSource<Task>([]));
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   constructor() {}
 
   ngOnInit() {
+    this.store.dispatch(TasksActions.loadTasks({}));
     this.setTasksListener();
     this.setTableDataSourceListener();
   }
@@ -93,33 +84,24 @@ export class Tasks {
   openAddTaskDialog(): void {
     const dialogRef = this.dialog.open(TaskFormDialog);
 
-    dialogRef.afterClosed().subscribe((payload) => {
-      if (payload) {
-        this.addTask(payload);
+    dialogRef.afterClosed().subscribe((task) => {
+      if (task) {
+        this.store.dispatch(TasksActions.createTask({ task }));
       }
     });
   }
 
   deleteTask(taskId: string): void {
-    this.isLoading.update(() => true);
-
-    this.tasksService
-      .deleteTask(taskId)
-      .pipe(finalize(() => this.isLoading.update(() => false)))
-      .subscribe({
-        next: () => {
-          this.tasksChanged$.next();
-        },
-        error: () => this.hasError.update(() => true),
-      });
+    this.store.dispatch(TasksActions.deleteTask({ taskId }));
   }
 
-  opeEditTaskDialog(task: Task): void {
-    const dialogRef = this.dialog.open(TaskFormDialog, { data: task });
+  opeEditTaskDialog(oldData: Task): void {
+    const dialogRef = this.dialog.open(TaskFormDialog, { data: oldData });
 
-    dialogRef.afterClosed().subscribe((payload) => {
-      if (payload) {
-        this.editTask({ ...payload, id: task.id });
+    dialogRef.afterClosed().subscribe((task) => {
+      if (task) {
+        const updatedTask: Task = { ...task, id: oldData.id };
+        this.store.dispatch(TasksActions.editTask({ task: updatedTask }));
       }
     });
   }
@@ -142,20 +124,14 @@ export class Tasks {
       startWith(this.dateRangeControl.value)
     );
 
-    this.tasks$ = combineLatest([
+    combineLatest([
       searchChanges$,
       statusesChanges$,
       dateRangeChanges$,
-      this.tasksChanged$.asObservable(),
-    ]).pipe(
-      switchMap(([search, statuses, dateRange]) => {
-        this.isLoading.update(() => true);
-
-        return this.tasksService
-          .getTasks({ search, statuses, dateRange })
-          .pipe(finalize(() => this.isLoading.update(() => false)));
-      })
-    );
+      this.isOutdated$,
+    ]).subscribe(([search, statuses, dateRange]) => {
+      this.store.dispatch(TasksActions.loadTasks({ filters: { search, statuses, dateRange } }));
+    });
   }
 
   private setTableDataSourceListener(): void {
@@ -167,37 +143,7 @@ export class Tasks {
           return dataSource;
         });
       },
-      error: () => {
-        this.hasError.update(() => true);
-      },
     });
-  }
-
-  private addTask(payload: Omit<Task, 'id'>) {
-    this.tasksService
-      .createTask(payload)
-      .pipe(first())
-      .subscribe({
-        next: () => {
-          this.tasksChanged$.next();
-        },
-        error: () => this.hasError.update(() => true),
-      });
-  }
-
-  private editTask(payload: Task): void {
-    this.tasksService
-      .updateTask(payload.id, payload)
-      .pipe(first())
-      .subscribe({
-        next: () => {
-          this.tasksChanged$.next();
-        },
-        error: (err) => {
-          console.log(err);
-          this.hasError.update(() => true);
-        },
-      });
   }
 
   get searchControl() {
