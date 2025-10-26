@@ -1,22 +1,22 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
-import { provideNativeDateAdapter } from '@angular/material/core';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
-import { MatTableModule } from '@angular/material/table';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { provideNativeDateAdapter } from '@angular/material/core';
 import { Store } from '@ngrx/store';
-import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
-import { StatusPipe } from '../shared/pipes/status-pipe';
-import { TaskFormDialog } from './components/task-form-dialog/task-form-dialog';
+import { Tasks } from './tasks';
 import { Task } from './data/models/task.model';
+import { TaskFormDialog } from './components/task-form-dialog/task-form-dialog';
+import { StatusPipe } from '../shared/pipes/status-pipe';
 import * as TasksActions from './store/tasks.actions';
 import * as TasksSelectors from './store/tasks.selectors';
-import { Tasks } from './tasks';
 
 describe('Tasks Component (with NgRx)', () => {
   let component: Tasks;
@@ -121,10 +121,15 @@ describe('Tasks Component (with NgRx)', () => {
         search: '',
         statuses: [],
         dateRange: {
-          start: '',
-          end: '',
+          start: null,
+          end: null,
         },
       });
+    });
+
+    it('should initialize date controls as null', () => {
+      expect(component.startDateControl.value).toBeNull();
+      expect(component.endDateControl.value).toBeNull();
     });
   });
 
@@ -211,7 +216,11 @@ describe('Tasks Component (with NgRx)', () => {
 
       expect(store.dispatch).toHaveBeenCalledWith(
         TasksActions.loadTasks({
-          filters: { search: 'Task 1', statuses: [], dateRange: { start: '', end: '' } },
+          filters: {
+            search: 'Task 1',
+            statuses: [],
+            dateRange: { start: null, end: null },
+          },
         })
       );
     }));
@@ -231,7 +240,11 @@ describe('Tasks Component (with NgRx)', () => {
       expect(store.dispatch).toHaveBeenCalledTimes(1);
       expect(store.dispatch).toHaveBeenCalledWith(
         TasksActions.loadTasks({
-          filters: { search: 'Tas', statuses: [], dateRange: { start: '', end: '' } },
+          filters: {
+            search: 'Tas',
+            statuses: [],
+            dateRange: { start: null, end: null },
+          },
         })
       );
     }));
@@ -263,7 +276,11 @@ describe('Tasks Component (with NgRx)', () => {
 
       expect(store.dispatch).toHaveBeenCalledWith(
         TasksActions.loadTasks({
-          filters: { search: '', statuses: ['PENDING', 'DONE'], dateRange: { start: '', end: '' } },
+          filters: {
+            search: '',
+            statuses: ['PENDING', 'DONE'],
+            dateRange: { start: null, end: null },
+          },
         })
       );
     }));
@@ -283,36 +300,84 @@ describe('Tasks Component (with NgRx)', () => {
   });
 
   describe('Date Range Filtering', () => {
-    it('should dispatch loadTasks when end date is set', fakeAsync(() => {
+    it('should dispatch loadTasks when both dates are set', fakeAsync(() => {
       store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
       (store.dispatch as jasmine.Spy).calls.reset();
 
-      component.startDateControl.setValue('2024-01-01');
-      component.endDateControl.setValue('2024-01-31');
+      const startDate = new Date('2024-01-01');
+      const endDate = new Date('2024-01-31');
+
+      component.startDateControl.setValue(startDate);
+      component.endDateControl.setValue(endDate);
       tick(300);
 
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TasksActions.loadTasks({
-          filters: {
-            search: '',
-            statuses: [],
-            dateRange: { start: '2024-01-01', end: '2024-01-31' },
-          },
-        })
-      );
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
+      expect(dispatchedAction.type).toBe(TasksActions.loadTasks.type);
+      expect(dispatchedAction.filters.search).toBe('');
+      expect(dispatchedAction.filters.statuses).toEqual([]);
+      expect(dispatchedAction.filters.dateRange.start).toEqual(startDate);
+      expect(dispatchedAction.filters.dateRange.end).toEqual(endDate);
     }));
 
-    it('should not dispatch if end date is not set', fakeAsync(() => {
+    it('should dispatch when both dates are cleared', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
+      fixture.detectChanges();
+
+      // Set dates first
+      component.startDateControl.setValue(new Date('2024-01-01'));
+      component.endDateControl.setValue(new Date('2024-01-31'));
+      tick(300);
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      // Clear both dates
+      component.startDateControl.setValue(null);
+      component.endDateControl.setValue(null);
+      tick(300);
+
+      expect(store.dispatch).toHaveBeenCalled();
+    }));
+
+    it('should not dispatch if only start date is set', fakeAsync(() => {
       store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
       (store.dispatch as jasmine.Spy).calls.reset();
 
-      component.startDateControl.setValue('2024-01-01');
+      component.startDateControl.setValue(new Date('2024-01-01'));
       tick(300);
 
       expect(store.dispatch).not.toHaveBeenCalled();
     }));
+
+    it('should not dispatch if only end date is set', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
+      fixture.detectChanges();
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      component.endDateControl.setValue(new Date('2024-01-31'));
+      tick(300);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    }));
+  });
+
+  describe('clearDateRange', () => {
+    it('should clear both start and end dates', () => {
+      component.startDateControl.setValue(new Date('2024-01-01'));
+      component.endDateControl.setValue(new Date('2024-01-31'));
+
+      component.clearDateRange();
+
+      expect(component.startDateControl.value).toBeNull();
+      expect(component.endDateControl.value).toBeNull();
+    });
+
+    it('should work when dates are already null', () => {
+      component.clearDateRange();
+
+      expect(component.startDateControl.value).toBeNull();
+      expect(component.endDateControl.value).toBeNull();
+    });
   });
 
   describe('Combined Filters', () => {
@@ -321,21 +386,21 @@ describe('Tasks Component (with NgRx)', () => {
       fixture.detectChanges();
       (store.dispatch as jasmine.Spy).calls.reset();
 
+      const startDate = new Date('2024-01-01');
+      const endDate = new Date('2024-01-31');
+
       component.searchControl.setValue('Task');
       component.statusesControl.setValue(['PENDING']);
-      component.startDateControl.setValue('2024-01-01');
-      component.endDateControl.setValue('2024-01-31');
+      component.startDateControl.setValue(startDate);
+      component.endDateControl.setValue(endDate);
       tick(300);
 
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TasksActions.loadTasks({
-          filters: {
-            search: 'Task',
-            statuses: ['PENDING'],
-            dateRange: { start: '2024-01-01', end: '2024-01-31' },
-          },
-        })
-      );
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
+      expect(dispatchedAction.type).toBe(TasksActions.loadTasks.type);
+      expect(dispatchedAction.filters.search).toBe('Task');
+      expect(dispatchedAction.filters.statuses).toEqual(['PENDING']);
+      expect(dispatchedAction.filters.dateRange.start).toEqual(startDate);
+      expect(dispatchedAction.filters.dateRange.end).toEqual(endDate);
     }));
   });
 
@@ -354,7 +419,7 @@ describe('Tasks Component (with NgRx)', () => {
           filters: {
             search: '',
             statuses: [],
-            dateRange: { start: '', end: '' },
+            dateRange: { start: null, end: null },
           },
         })
       );

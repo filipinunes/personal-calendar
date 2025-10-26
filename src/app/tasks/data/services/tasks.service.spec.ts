@@ -143,7 +143,7 @@ describe('TasksService', () => {
 
     it('should filter tasks by date range', (done) => {
       const filters: TasksApiFilters = {
-        dateRange: { start: '2024-01-18', end: '2024-01-26' },
+        dateRange: { start: new Date('2024-01-18'), end: new Date('2024-01-26') },
       };
 
       service.getTasks(filters).subscribe((tasks) => {
@@ -159,7 +159,7 @@ describe('TasksService', () => {
 
     it('should include tasks on the boundary dates', (done) => {
       const filters: TasksApiFilters = {
-        dateRange: { start: '2024-01-15', end: '2024-01-15' },
+        dateRange: { start: new Date('2024-01-15'), end: new Date('2024-01-15') },
       };
 
       service.getTasks(filters).subscribe((tasks) => {
@@ -176,7 +176,7 @@ describe('TasksService', () => {
       const filters: TasksApiFilters = {
         search: 'Task',
         statuses: ['PENDING', 'IN_PROGRESS'],
-        dateRange: { start: '2024-01-10', end: '2024-01-20' },
+        dateRange: { start: new Date('2024-01-10'), end: new Date('2024-01-20') },
       };
 
       service.getTasks(filters).subscribe((tasks) => {
