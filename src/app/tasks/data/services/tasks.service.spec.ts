@@ -1,11 +1,11 @@
-import { TestBed } from '@angular/core/testing';
+import { HttpClient, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TasksService } from './tasks.service';
-import { provideHttpClient } from '@angular/common/http';
+import { TestBed } from '@angular/core/testing';
 import { Task } from '../models/task.model';
 import { TasksApiFilters } from './tasks-api.interface';
+import { TasksService } from './tasks.service';
 
-describe('TaskService', () => {
+describe('TasksService', () => {
   let service: TasksService;
   let httpMock: HttpTestingController;
   const apiUrl = 'api/tasks';
@@ -39,7 +39,8 @@ describe('TaskService', () => {
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
 
-    service = TestBed.inject(TasksService);
+    const httpClient = TestBed.inject(HttpClient);
+    service = new TasksService(httpClient);
     httpMock = TestBed.inject(HttpTestingController);
   });
 
@@ -200,6 +201,21 @@ describe('TaskService', () => {
       const req = httpMock.expectOne(apiUrl);
       req.flush(mockTasks);
     });
+
+    it('should not mutate original tasks array', (done) => {
+      const filters: TasksApiFilters = { search: 'Task One' };
+
+      service.getTasks(filters).subscribe((tasks) => {
+        expect(tasks.length).toBe(1);
+        done();
+      });
+
+      const req = httpMock.expectOne(apiUrl);
+      const originalTasks = [...mockTasks];
+      req.flush(mockTasks);
+
+      expect(mockTasks).toEqual(originalTasks);
+    });
   });
 
   describe('getTaskById', () => {
@@ -283,6 +299,25 @@ describe('TaskService', () => {
       const req1 = httpMock.expectOne(apiUrl);
       req1.flush({ ...newTask, id: req1.request.body.id });
     });
+
+    it('should send task data in request body', (done) => {
+      const newTask: Omit<Task, 'id'> = {
+        date: '2024-01-30',
+        title: 'Test Task',
+        description: 'Test description',
+        status: 'PENDING',
+      };
+
+      service.createTask(newTask).subscribe(() => done());
+
+      const req = httpMock.expectOne(apiUrl);
+      expect(req.request.body.title).toBe(newTask.title);
+      expect(req.request.body.description).toBe(newTask.description);
+      expect(req.request.body.status).toBe(newTask.status);
+      expect(req.request.body.date).toBe(newTask.date);
+
+      req.flush({ ...newTask, id: req.request.body.id });
+    });
   });
 
   describe('updateTask', () => {
@@ -293,30 +328,57 @@ describe('TaskService', () => {
         status: 'IN_PROGRESS',
       };
 
-      service.updateTask(taskId, updates).subscribe((task) => {
-        expect(task.title).toBe('Updated Title');
-        expect(task.status).toBe('IN_PROGRESS');
+      service.updateTask(taskId, updates).subscribe(() => {
+        expect().nothing();
         done();
       });
 
       const req = httpMock.expectOne(`${apiUrl}/${taskId}`);
       expect(req.request.method).toBe('PUT');
       expect(req.request.body).toEqual(updates);
-      req.flush({ ...mockTasks[0], ...updates });
+      req.flush(null);
     });
 
     it('should handle partial updates', (done) => {
       const taskId = '1';
       const updates: Partial<Task> = { status: 'DONE' };
 
-      service.updateTask(taskId, updates).subscribe((task) => {
-        expect(task.status).toBe('DONE');
-        expect(task.title).toBe('Task One');
+      service.updateTask(taskId, updates).subscribe(() => {
+        expect().nothing();
         done();
       });
 
       const req = httpMock.expectOne(`${apiUrl}/${taskId}`);
-      req.flush({ ...mockTasks[0], status: 'DONE' });
+      expect(req.request.body).toEqual({ status: 'DONE' });
+      req.flush(null);
+    });
+
+    it('should return void observable', (done) => {
+      const taskId = '1';
+      const updates: Partial<Task> = { title: 'Updated' };
+
+      service.updateTask(taskId, updates).subscribe((result) => {
+        expect(result).toBeNull();
+        done();
+      });
+
+      const req = httpMock.expectOne(`${apiUrl}/${taskId}`);
+      req.flush(null);
+    });
+
+    it('should handle server errors', (done) => {
+      const taskId = '1';
+      const updates: Partial<Task> = { title: 'Updated' };
+
+      service.updateTask(taskId, updates).subscribe({
+        error: (error) => {
+          expect(error.status).toBe(500);
+          done();
+        },
+      });
+
+      const req = httpMock.expectOne(`${apiUrl}/${taskId}`);
+      req.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
     });
   });
 
@@ -331,6 +393,18 @@ describe('TaskService', () => {
 
       const req = httpMock.expectOne(`${apiUrl}/${taskId}`);
       expect(req.request.method).toBe('DELETE');
+      req.flush(null);
+    });
+
+    it('should return void observable', (done) => {
+      const taskId = '1';
+
+      service.deleteTask(taskId).subscribe((result) => {
+        expect(result).toBeNull();
+        done();
+      });
+
+      const req = httpMock.expectOne(`${apiUrl}/${taskId}`);
       req.flush(null);
     });
 
@@ -378,6 +452,18 @@ describe('TaskService', () => {
 
       const req = httpMock.expectOne(apiUrl);
       req.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
+    });
+
+    it('should handle timeout errors', (done) => {
+      service.getTasks().subscribe({
+        error: (error) => {
+          expect(error.error.type).toBe('timeout');
+          done();
+        },
+      });
+
+      const req = httpMock.expectOne(apiUrl);
+      req.error(new ProgressEvent('timeout'), { status: 0, statusText: 'Unknown Error' });
     });
   });
 });

@@ -1,24 +1,27 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
+import { provideNativeDateAdapter } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
-import { of, throwError } from 'rxjs';
-import { Tasks } from './tasks';
-import { TasksService } from './data/services/tasks.service';
-import { Task } from './data/models/task.model';
-import { TaskFormDialog } from './components/task-form-dialog/task-form-dialog';
+import { MatTableModule } from '@angular/material/table';
+import { Store } from '@ngrx/store';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { of } from 'rxjs';
 import { StatusPipe } from '../shared/pipes/status-pipe';
+import { TaskFormDialog } from './components/task-form-dialog/task-form-dialog';
+import { Task } from './data/models/task.model';
+import * as TasksActions from './store/tasks.actions';
+import * as TasksSelectors from './store/tasks.selectors';
+import { Tasks } from './tasks';
 
-describe('Tasks Component', () => {
+describe('Tasks Component (with NgRx)', () => {
   let component: Tasks;
   let fixture: ComponentFixture<Tasks>;
-  let tasksService: jasmine.SpyObj<TasksService>;
+  let store: MockStore;
   let dialog: jasmine.SpyObj<MatDialog>;
 
   const mockTasks: Task[] = [
@@ -45,19 +48,22 @@ describe('Tasks Component', () => {
     },
   ];
 
-  beforeEach(async () => {
-    const tasksServiceSpy = jasmine.createSpyObj('TasksService', [
-      'getTasks',
-      'createTask',
-      'updateTask',
-      'deleteTask',
-    ]);
-    const dialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+  const initialState = {
+    tasks: {
+      ids: ['1', '2', '3'],
+      entities: {
+        '1': mockTasks[0],
+        '2': mockTasks[1],
+        '3': mockTasks[2],
+      },
+      loading: false,
+      error: null,
+      outdated: false,
+    },
+  };
 
-    tasksServiceSpy.getTasks.and.returnValue(of(mockTasks));
-    tasksServiceSpy.createTask.and.returnValue(of(mockTasks[0]));
-    tasksServiceSpy.updateTask.and.returnValue(of(mockTasks[0]));
-    tasksServiceSpy.deleteTask.and.returnValue(of(void 0));
+  beforeEach(async () => {
+    const dialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -72,14 +78,16 @@ describe('Tasks Component', () => {
         StatusPipe,
       ],
       providers: [
-        { provide: TasksService, useValue: tasksServiceSpy },
+        provideMockStore({ initialState }),
         { provide: MatDialog, useValue: dialogSpy },
         provideNativeDateAdapter(),
       ],
     }).compileComponents();
 
-    tasksService = TestBed.inject(TasksService) as jasmine.SpyObj<TasksService>;
+    store = TestBed.inject(Store) as MockStore;
     dialog = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
+
+    spyOn(store, 'dispatch');
 
     fixture = TestBed.createComponent(Tasks);
     component = fixture.componentInstance;
@@ -108,14 +116,6 @@ describe('Tasks Component', () => {
       ]);
     });
 
-    it('should initialize isLoading as false', () => {
-      expect(component.isLoading()).toBe(false);
-    });
-
-    it('should initialize hasError as false', () => {
-      expect(component.hasError()).toBe(false);
-    });
-
     it('should initialize form with empty values', () => {
       expect(component.form.value).toEqual({
         search: '',
@@ -129,26 +129,53 @@ describe('Tasks Component', () => {
   });
 
   describe('ngOnInit', () => {
-    it('should call getTasks on initialization', fakeAsync(() => {
+    it('should dispatch loadTasks action on initialization', () => {
       fixture.detectChanges();
-      tick(300);
 
-      expect(tasksService.getTasks).toHaveBeenCalled();
-    }));
+      expect(store.dispatch).toHaveBeenCalledWith(TasksActions.loadTasks({}));
+    });
 
-    it('should load tasks into dataSource', fakeAsync(() => {
+    it('should subscribe to tasks$ selector', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectAllTasks, mockTasks);
+
       fixture.detectChanges();
-      tick(300);
+      tick();
 
       expect(component.dataSource().data).toEqual(mockTasks);
     }));
 
-    it('should set isLoading to false after loading tasks', fakeAsync(() => {
-      fixture.detectChanges();
-      tick(300);
+    it('should subscribe to isLoading$ selector', (done) => {
+      store.overrideSelector(TasksSelectors.selectLoading, true);
 
-      expect(component.isLoading()).toBe(false);
-    }));
+      fixture.detectChanges();
+
+      component.isLoading$.subscribe((loading) => {
+        expect(loading).toBe(true);
+        done();
+      });
+    });
+
+    it('should subscribe to hasError$ selector', (done) => {
+      store.overrideSelector(TasksSelectors.selectError, 'Some error');
+
+      fixture.detectChanges();
+
+      component.hasError$.subscribe((error) => {
+        expect(error).toBe('Some error');
+        done();
+      });
+    });
+
+    it('should subscribe to isOutdated$ selector', (done) => {
+      store.overrideSelector(TasksSelectors.selectOutdated, true);
+
+      fixture.detectChanges();
+
+      component.isOutdated$.subscribe((outdated) => {
+        expect(outdated).toBe(true);
+        done();
+      });
+    });
   });
 
   describe('Form Controls', () => {
@@ -174,23 +201,25 @@ describe('Tasks Component', () => {
   });
 
   describe('Search Filtering', () => {
-    it('should call getTasks with search term after debounce', fakeAsync(() => {
+    it('should dispatch loadTasks with search filter after debounce', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.searchControl.setValue('Task 1');
       tick(300);
 
-      expect(tasksService.getTasks).toHaveBeenCalledWith(
-        jasmine.objectContaining({ search: 'Task 1' })
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TasksActions.loadTasks({
+          filters: { search: 'Task 1', statuses: [], dateRange: { start: '', end: '' } },
+        })
       );
     }));
 
     it('should debounce search input changes', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.searchControl.setValue('T');
       tick(100);
@@ -199,90 +228,98 @@ describe('Tasks Component', () => {
       component.searchControl.setValue('Tas');
       tick(300);
 
-      expect(tasksService.getTasks).toHaveBeenCalledTimes(1);
-      expect(tasksService.getTasks).toHaveBeenCalledWith(
-        jasmine.objectContaining({ search: 'Tas' })
+      expect(store.dispatch).toHaveBeenCalledTimes(1);
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TasksActions.loadTasks({
+          filters: { search: 'Tas', statuses: [], dateRange: { start: '', end: '' } },
+        })
       );
     }));
 
-    it('should not call getTasks for duplicate search values', fakeAsync(() => {
+    it('should not dispatch for duplicate search values', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.searchControl.setValue('Task');
       tick(300);
-      tasksService.getTasks.calls.reset();
+      const firstCallCount = (store.dispatch as jasmine.Spy).calls.count();
 
       component.searchControl.setValue('Task');
       tick(300);
 
-      expect(tasksService.getTasks).not.toHaveBeenCalled();
+      expect((store.dispatch as jasmine.Spy).calls.count()).toBe(firstCallCount);
     }));
   });
 
   describe('Status Filtering', () => {
-    it('should call getTasks with selected statuses', fakeAsync(() => {
+    it('should dispatch loadTasks with selected statuses', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.statusesControl.setValue(['PENDING', 'DONE']);
       tick(300);
 
-      expect(tasksService.getTasks).toHaveBeenCalledWith(
-        jasmine.objectContaining({ statuses: ['PENDING', 'DONE'] })
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TasksActions.loadTasks({
+          filters: { search: '', statuses: ['PENDING', 'DONE'], dateRange: { start: '', end: '' } },
+        })
       );
     }));
 
     it('should debounce status changes', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.statusesControl.setValue(['PENDING']);
       tick(100);
       component.statusesControl.setValue(['PENDING', 'DONE']);
       tick(300);
 
-      expect(tasksService.getTasks).toHaveBeenCalledTimes(1);
+      expect(store.dispatch).toHaveBeenCalledTimes(1);
     }));
   });
 
   describe('Date Range Filtering', () => {
-    it('should call getTasks when end date is set', fakeAsync(() => {
+    it('should dispatch loadTasks when end date is set', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.startDateControl.setValue('2024-01-01');
       component.endDateControl.setValue('2024-01-31');
       tick(300);
 
-      expect(tasksService.getTasks).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          dateRange: { start: '2024-01-01', end: '2024-01-31' },
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TasksActions.loadTasks({
+          filters: {
+            search: '',
+            statuses: [],
+            dateRange: { start: '2024-01-01', end: '2024-01-31' },
+          },
         })
       );
     }));
 
-    it('should not trigger filter if end date is not set', fakeAsync(() => {
+    it('should not dispatch if end date is not set', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.startDateControl.setValue('2024-01-01');
       tick(300);
 
-      expect(tasksService.getTasks).not.toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
     }));
   });
 
   describe('Combined Filters', () => {
     it('should apply all filters simultaneously', fakeAsync(() => {
+      store.overrideSelector(TasksSelectors.selectOutdated, false);
       fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
 
       component.searchControl.setValue('Task');
       component.statusesControl.setValue(['PENDING']);
@@ -290,11 +327,37 @@ describe('Tasks Component', () => {
       component.endDateControl.setValue('2024-01-31');
       tick(300);
 
-      expect(tasksService.getTasks).toHaveBeenCalledWith({
-        search: 'Task',
-        statuses: ['PENDING'],
-        dateRange: { start: '2024-01-01', end: '2024-01-31' },
-      });
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TasksActions.loadTasks({
+          filters: {
+            search: 'Task',
+            statuses: ['PENDING'],
+            dateRange: { start: '2024-01-01', end: '2024-01-31' },
+          },
+        })
+      );
+    }));
+  });
+
+  describe('Outdated State Trigger', () => {
+    it('should reload tasks when isOutdated$ changes to true', fakeAsync(() => {
+      const outdatedSelector = store.overrideSelector(TasksSelectors.selectOutdated, false);
+      fixture.detectChanges();
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      outdatedSelector.setResult(true);
+      store.refreshState();
+      tick(300);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TasksActions.loadTasks({
+          filters: {
+            search: '',
+            statuses: [],
+            dateRange: { start: '', end: '' },
+          },
+        })
+      );
     }));
   });
 
@@ -311,7 +374,7 @@ describe('Tasks Component', () => {
       expect(dialog.open).toHaveBeenCalledWith(TaskFormDialog);
     });
 
-    it('should create task when dialog returns payload', fakeAsync(() => {
+    it('should dispatch createTask action when dialog returns data', fakeAsync(() => {
       const newTask = {
         title: 'New Task',
         date: '2024-02-01',
@@ -328,65 +391,21 @@ describe('Tasks Component', () => {
       component.openAddTaskDialog();
       tick();
 
-      expect(tasksService.createTask).toHaveBeenCalledWith(newTask);
+      expect(store.dispatch).toHaveBeenCalledWith(TasksActions.createTask({ task: newTask }));
     }));
 
-    it('should not create task when dialog is cancelled', fakeAsync(() => {
+    it('should not dispatch when dialog is cancelled', fakeAsync(() => {
       const dialogRefSpy = jasmine.createSpyObj<MatDialogRef<TaskFormDialog>>('MatDialogRef', [
         'afterClosed',
       ]);
       dialogRefSpy.afterClosed.and.returnValue(of(null));
       dialog.open.and.returnValue(dialogRefSpy);
 
-      tasksService.createTask.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
       component.openAddTaskDialog();
       tick();
 
-      expect(tasksService.createTask).not.toHaveBeenCalled();
-    }));
-
-    it('should refresh tasks after successful creation', fakeAsync(() => {
-      const newTask = {
-        title: 'New Task',
-        date: '2024-02-01',
-        status: 'PENDING' as const,
-      };
-
-      const dialogRefSpy = jasmine.createSpyObj<MatDialogRef<TaskFormDialog>>('MatDialogRef', [
-        'afterClosed',
-      ]);
-      dialogRefSpy.afterClosed.and.returnValue(of(newTask));
-      dialog.open.and.returnValue(dialogRefSpy);
-
-      fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
-
-      component.openAddTaskDialog();
-      tick();
-
-      expect(tasksService.getTasks).toHaveBeenCalled();
-    }));
-
-    it('should set hasError to true on creation failure', fakeAsync(() => {
-      const newTask = {
-        title: 'New Task',
-        date: '2024-02-01',
-        status: 'PENDING' as const,
-      };
-
-      tasksService.createTask.and.returnValue(throwError(() => new Error('Creation failed')));
-
-      const dialogRefSpy = jasmine.createSpyObj<MatDialogRef<TaskFormDialog>>('MatDialogRef', [
-        'afterClosed',
-      ]);
-      dialogRefSpy.afterClosed.and.returnValue(of(newTask));
-      dialog.open.and.returnValue(dialogRefSpy);
-
-      component.openAddTaskDialog();
-      tick();
-
-      expect(component.hasError()).toBe(true);
+      expect(store.dispatch).not.toHaveBeenCalled();
     }));
   });
 
@@ -404,7 +423,7 @@ describe('Tasks Component', () => {
       expect(dialog.open).toHaveBeenCalledWith(TaskFormDialog, { data: task });
     });
 
-    it('should update task when dialog returns payload', fakeAsync(() => {
+    it('should dispatch editTask action with updated task', fakeAsync(() => {
       const task = mockTasks[0];
       const updates = {
         title: 'Updated Task',
@@ -421,10 +440,35 @@ describe('Tasks Component', () => {
       component.opeEditTaskDialog(task);
       tick();
 
-      expect(tasksService.updateTask).toHaveBeenCalledWith(task.id, { ...updates, id: task.id });
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TasksActions.editTask({
+          task: { ...updates, id: task.id },
+        })
+      );
     }));
 
-    it('should not update task when dialog is cancelled', fakeAsync(() => {
+    it('should preserve task id when editing', fakeAsync(() => {
+      const task = mockTasks[0];
+      const updates = {
+        title: 'Updated Task',
+        date: '2024-02-01',
+        status: 'DONE' as const,
+      };
+
+      const dialogRefSpy = jasmine.createSpyObj<MatDialogRef<TaskFormDialog>>('MatDialogRef', [
+        'afterClosed',
+      ]);
+      dialogRefSpy.afterClosed.and.returnValue(of(updates));
+      dialog.open.and.returnValue(dialogRefSpy);
+
+      component.opeEditTaskDialog(task);
+      tick();
+
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
+      expect(dispatchedAction.task.id).toBe(task.id);
+    }));
+
+    it('should not dispatch when dialog is cancelled', fakeAsync(() => {
       const task = mockTasks[0];
       const dialogRefSpy = jasmine.createSpyObj<MatDialogRef<TaskFormDialog>>('MatDialogRef', [
         'afterClosed',
@@ -432,135 +476,56 @@ describe('Tasks Component', () => {
       dialogRefSpy.afterClosed.and.returnValue(of(null));
       dialog.open.and.returnValue(dialogRefSpy);
 
-      tasksService.updateTask.calls.reset();
+      (store.dispatch as jasmine.Spy).calls.reset();
       component.opeEditTaskDialog(task);
       tick();
 
-      expect(tasksService.updateTask).not.toHaveBeenCalled();
-    }));
-
-    it('should refresh tasks after successful update', fakeAsync(() => {
-      const task = mockTasks[0];
-      const updates = { title: 'Updated' };
-
-      const dialogRefSpy = jasmine.createSpyObj<MatDialogRef<TaskFormDialog>>('MatDialogRef', [
-        'afterClosed',
-      ]);
-      dialogRefSpy.afterClosed.and.returnValue(of(updates));
-      dialog.open.and.returnValue(dialogRefSpy);
-
-      fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
-
-      component.opeEditTaskDialog(task);
-      tick();
-
-      expect(tasksService.getTasks).toHaveBeenCalled();
-    }));
-
-    it('should set hasError to true on update failure', fakeAsync(() => {
-      const task = mockTasks[0];
-      const updates = { title: 'Updated' };
-
-      spyOn(console, 'log');
-      tasksService.updateTask.and.returnValue(throwError(() => new Error('Update failed')));
-
-      const dialogRefSpy = jasmine.createSpyObj<MatDialogRef<TaskFormDialog>>('MatDialogRef', [
-        'afterClosed',
-      ]);
-      dialogRefSpy.afterClosed.and.returnValue(of(updates));
-      dialog.open.and.returnValue(dialogRefSpy);
-
-      component.opeEditTaskDialog(task);
-      tick();
-
-      expect(component.hasError()).toBe(true);
-      expect(console.log).toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
     }));
   });
 
   describe('deleteTask', () => {
-    it('should call deleteTask service method', fakeAsync(() => {
+    it('should dispatch deleteTask action', () => {
       const taskId = '1';
 
       component.deleteTask(taskId);
-      tick();
 
-      expect(tasksService.deleteTask).toHaveBeenCalledWith(taskId);
-    }));
+      expect(store.dispatch).toHaveBeenCalledWith(TasksActions.deleteTask({ taskId }));
+    });
 
-    it('should set isLoading to true while deleting', fakeAsync(() => {
-      const taskId = '1';
-      let loadingDuringCall = false;
-
-      tasksService.deleteTask.and.callFake(() => {
-        loadingDuringCall = component.isLoading();
-        return of(void 0);
-      });
+    it('should dispatch with correct task id', () => {
+      const taskId = '123-abc-456';
 
       component.deleteTask(taskId);
-      tick();
 
-      expect(loadingDuringCall).toBe(true);
-    }));
-
-    it('should set isLoading to false after deletion', fakeAsync(() => {
-      const taskId = '1';
-
-      component.deleteTask(taskId);
-      tick();
-
-      expect(component.isLoading()).toBe(false);
-    }));
-
-    it('should refresh tasks after successful deletion', fakeAsync(() => {
-      fixture.detectChanges();
-      tick(300);
-      tasksService.getTasks.calls.reset();
-
-      component.deleteTask('1');
-      tick();
-
-      expect(tasksService.getTasks).toHaveBeenCalled();
-    }));
-
-    it('should set hasError to true on deletion failure', fakeAsync(() => {
-      tasksService.deleteTask.and.returnValue(throwError(() => new Error('Delete failed')));
-
-      component.deleteTask('1');
-      tick();
-
-      expect(component.hasError()).toBe(true);
-    }));
-
-    it('should set isLoading to false even on error', fakeAsync(() => {
-      tasksService.deleteTask.and.returnValue(throwError(() => new Error('Delete failed')));
-
-      component.deleteTask('1');
-      tick();
-
-      expect(component.isLoading()).toBe(false);
-    }));
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
+      expect(dispatchedAction.taskId).toBe(taskId);
+    });
   });
 
-  describe('Error Handling', () => {
-    it('should set hasError to true when getTasks fails', fakeAsync(() => {
-      tasksService.getTasks.and.returnValue(throwError(() => new Error('Load failed')));
+  describe('Store Selectors', () => {
+    it('should populate dataSource from tasks$ selector', fakeAsync(() => {
+      const customTasks = [mockTasks[0], mockTasks[1]];
+      store.overrideSelector(TasksSelectors.selectAllTasks, customTasks);
 
       fixture.detectChanges();
-      tick(300);
+      tick();
 
-      expect(component.hasError()).toBe(true);
+      expect(component.dataSource().data).toEqual(customTasks);
     }));
 
-    it('should set isLoading to false when getTasks fails', fakeAsync(() => {
-      tasksService.getTasks.and.returnValue(throwError(() => new Error('Load failed')));
-
+    it('should update dataSource when tasks change', fakeAsync(() => {
+      const tasksSelector = store.overrideSelector(TasksSelectors.selectAllTasks, [mockTasks[0]]);
       fixture.detectChanges();
-      tick(300);
+      tick();
 
-      expect(component.isLoading()).toBe(false);
+      expect(component.dataSource().data.length).toBe(1);
+
+      tasksSelector.setResult(mockTasks);
+      store.refreshState();
+      tick();
+
+      expect(component.dataSource().data.length).toBe(3);
     }));
   });
 });
