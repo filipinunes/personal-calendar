@@ -4,7 +4,7 @@ import { Task } from '../models/task.model';
 export interface TasksApiFilters {
   search?: string | null;
   statuses?: string[] | null;
-  dateRange?: { start?: string | null; end?: string | null };
+  dateRange?: { start?: Date | null; end?: Date | null };
 }
 
 export interface TasksApi {

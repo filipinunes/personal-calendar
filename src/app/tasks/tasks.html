@@ -21,13 +21,21 @@
 
     <mat-form-field>
       <mat-label>Selecione um intervalo</mat-label>
-      <mat-date-range-input [rangePicker]="picker">
+      <mat-date-range-input disabled [rangePicker]="picker">
         <input [formControl]="startDateControl" matStartDate placeholder="Início" />
         <input [formControl]="endDateControl" matEndDate placeholder="Fim" />
       </mat-date-range-input>
-      <mat-hint>MM/DD/YYYY – MM/DD/YYYY</mat-hint>
-      <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
-      <mat-date-range-picker #picker></mat-date-range-picker>
+      <mat-datepicker-toggle
+        [disabled]="false"
+        matIconSuffix
+        [for]="picker"
+      ></mat-datepicker-toggle>
+      @if (endDateControl.value) {
+      <button matSuffix matIconButton aria-label="Clear" (click)="clearDateRange()">
+        <mat-icon>close</mat-icon>
+      </button>
+      }
+      <mat-date-range-picker [disabled]="false" #picker></mat-date-range-picker>
     </mat-form-field>
   </div>
 
@@ -41,7 +49,7 @@
     } @if(!(isLoading$ | async) && !(hasError$ | async)) { @if(dataSource().data.length === 0) {
     <div class="text-gray-500 text-center">Nenhuma tarefa encontrada.</div>
     } @else {
-    <table mat-table [dataSource]="dataSource()">
+    <table class="self-start" mat-table [dataSource]="dataSource()">
       <ng-container matColumnDef="title">
         <th mat-header-cell *matHeaderCellDef>Título</th>
         <td mat-cell *matCellDef="let element">{{ element.title }}</td>
@@ -54,7 +62,9 @@
 
       <ng-container matColumnDef="date">
         <th mat-header-cell *matHeaderCellDef>Data</th>
-        <td mat-cell *matCellDef="let element">{{ element.date | date }}</td>
+        <td mat-cell *matCellDef="let element">
+          {{ element.date | date : "dd 'de' MMM, yyyy" }}
+        </td>
       </ng-container>
 
       <ng-container matColumnDef="description">

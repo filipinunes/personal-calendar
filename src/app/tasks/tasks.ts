@@ -12,7 +12,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { Store } from '@ngrx/store';
-import { combineLatest, debounceTime, distinctUntilChanged, filter, map, startWith } from 'rxjs';
+import { combineLatest, debounceTime, distinctUntilChanged, filter, startWith } from 'rxjs';
 import { StatusPipe } from '../shared/pipes/status-pipe';
 import { TaskFormDialog } from './components/task-form-dialog/task-form-dialog';
 import { Task, TaskStatus } from './data/models/task.model';
@@ -56,8 +56,8 @@ export class Tasks {
     search: new FormControl(''),
     statuses: new FormControl<string[]>([]),
     dateRange: new FormGroup({
-      start: new FormControl(''),
-      end: new FormControl(''),
+      start: new FormControl<Date | null>(null),
+      end: new FormControl<Date | null>(null),
     }),
   });
 
@@ -106,6 +106,13 @@ export class Tasks {
     });
   }
 
+  clearDateRange(): void {
+    this.dateRangeControl.patchValue({
+      start: null,
+      end: null,
+    });
+  }
+
   private setTasksListener() {
     const searchChanges$ = this.searchControl.valueChanges.pipe(
       debounceTime(300),
@@ -118,9 +125,9 @@ export class Tasks {
       startWith(this.statusesControl.value)
     );
 
-    const dateRangeChanges$ = this.endDateControl.valueChanges.pipe(
-      filter((value) => !!value),
-      map(() => this.dateRangeControl.value),
+    const dateRangeChanges$ = this.dateRangeControl.valueChanges.pipe(
+      distinctUntilChanged(),
+      filter((value) => (!value.start && !value.end) || (!!value.start && !!value.end)),
       startWith(this.dateRangeControl.value)
     );
 
