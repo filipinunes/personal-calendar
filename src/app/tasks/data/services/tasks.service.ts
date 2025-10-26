@@ -50,8 +50,8 @@ export class TasksService implements TasksApi {
     return this.http.post<Task>(this.apiUrl, { ...task, id: uuid() });
   }
 
-  updateTask(id: string, task: Partial<Task>): Observable<Task> {
-    return this.http.put<Task>(`${this.apiUrl}/${id}`, task);
+  updateTask(id: string, task: Partial<Task>): Observable<void> {
+    return this.http.put<void>(`${this.apiUrl}/${id}`, task);
   }
 
   deleteTask(id: string): Observable<void> {

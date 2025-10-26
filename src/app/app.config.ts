@@ -6,10 +6,12 @@ import {
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
 
-import { routes } from './app.routes';
-import { HttpClientInMemoryWebApiModule } from 'angular-in-memory-web-api';
-import { InMemoryDataService } from './core/services/in-memory-data.service';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { EffectsModule } from '@ngrx/effects';
+import { StoreModule } from '@ngrx/store';
+import { HttpClientInMemoryWebApiModule } from 'angular-in-memory-web-api';
+import { routes } from './app.routes';
+import { InMemoryDataService } from './core/services/in-memory-data.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -18,7 +20,9 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideHttpClient(withInterceptorsFromDi()),
     importProvidersFrom(
-      HttpClientInMemoryWebApiModule.forRoot(InMemoryDataService, { delay: 500 })
+      HttpClientInMemoryWebApiModule.forRoot(InMemoryDataService, { delay: 500 }),
+      StoreModule.forRoot({}),
+      EffectsModule.forRoot([])
     ),
   ],
 };

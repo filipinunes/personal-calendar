@@ -12,7 +12,7 @@ export interface TasksApi {
 
   createTask(task: Omit<Task, 'id'>): Observable<Task>;
 
-  updateTask(id: string, task: Partial<Task>): Observable<Task>;
+  updateTask(id: string, task: Partial<Task>): Observable<void>;
 
   deleteTask(id: string): Observable<void>;
 
