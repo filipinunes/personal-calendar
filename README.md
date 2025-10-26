@@ -1,59 +1,151 @@
-# PersonalCalendar
+# Personal Calendar
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.6.
+Aplicação de gerenciamento de tarefas desenvolvida com Angular e NgRx, permitindo criar, editar, visualizar e excluir tarefas com filtros avançados.
 
-## Development server
+## Tecnologias Utilizadas
 
-To start a local development server, run:
+### Frontend
+- **Angular 20**
+- **Angular Material**
+- **TypeScript**
+- **RxJS**
+
+### Gerenciamento de Estado
+- **NgRx Store** - Gerenciamento de estado
+- **NgRx Effects** - Efeitos colaterais
+- **NgRx Entity** - Gerenciamento de entidades
+
+### Backend Simulado
+- **Angular In-Memory Web API** - API REST simulada em memória
+
+### Testes
+- **Karma** - Test runner
+- **Jasmine** - Framework de testes
+
+### Outras Ferramentas
+- **UUID** - Geração de IDs únicos
+- **RxJS Operators** - Operadores para manipulação de streams
+
+## Funcionalidades
+
+- Criar tarefas com título, descrição, data e status
+- Editar tarefas existentes
+- Excluir tarefas
+- Visualizar lista de tarefas em tabela paginada
+- Filtrar por texto de busca
+- Filtrar por status (Pendente, Em andamento, Concluída)
+- Filtrar por intervalo de datas
+- Tradução de status para português
+- Interface responsiva com Angular Material
+
+## Pré-requisitos
+
+- Angular CLI: versão 20.3.6 ou superior
+
+## Instalação
+
+1. Clone o repositório:
+
+```bash
+git clone https://github.com/filipinunes/personal-calendar.git
+```
+
+2. Entre no diretório do projeto:
+
+```bash
+cd personal-calendar
+```
+
+3. Instale as dependências:
+
+```bash
+npm install
+```
+
+## Executando o Projeto
+
+### Modo de Desenvolvimento
+
+Para iniciar o servidor de desenvolvimento:
 
 ```bash
 ng serve
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+Ou simplesmente:
 
 ```bash
-ng generate component component-name
+npm start
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+A aplicação estará disponível em `http://localhost:4200/`.
 
-```bash
-ng generate --help
-```
+## Executando os Testes
 
-## Building
+### Testes Unitários
 
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
+Para executar os testes unitários com Karma:
 
 ```bash
 ng test
 ```
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
+Ou:
 
 ```bash
-ng e2e
+npm test
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+### Verificar Cobertura de Testes
 
-## Additional Resources
+Para gerar o relatório de cobertura de testes:
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+```bash
+ng test --code-coverage
+```
+
+O relatório será gerado no diretório `coverage/`.
+
+## Estrutura do Projeto
+
+```
+src/
+├── app/
+│   ├── core/
+│   │   └── services/
+│   │       └── in-memory-data.service.ts    # Dados mockados
+│   ├── shared/
+│   │   └── pipes/
+│   │       └── status-pipe.ts               # Pipe de tradução de status
+│   ├── tasks/
+│   │   ├── components/
+│   │   │   └── task-form-dialog/           # Dialog de formulário
+│   │   ├── data/
+│   │   │   ├── models/
+│   │   │   │   └── task.model.ts           # Model de Task
+│   │   │   └── services/
+│   │   │       ├── tasks.service.ts        # Service da API
+│   │   │       └── tasks-api.interface.ts  # Interface da API
+│   │   ├── store/
+│   │   │   ├── tasks.actions.ts            # Actions do NgRx
+│   │   │   ├── tasks.effects.ts            # Effects do NgRx
+│   │   │   ├── tasks.reducer.ts            # Reducer do NgRx
+│   │   │   └── tasks.selectors.ts          # Selectors do NgRx
+│   │   ├── tasks.ts                        # Componente principal
+│   │   ├── tasks.html                      # Template
+│   │   └── tasks.css                       # Estilos
+│   ├── app.component.ts
+│   ├── app.config.ts
+│   └── app.routes.ts
+└── main.ts
+```
+
+## Como Usar
+
+1. **Adicionar uma tarefa**: Clique no botão "Nova Tarefa" e preencha o formulário
+2. **Editar uma tarefa**: Clique no ícone de edição na linha da tarefa
+3. **Excluir uma tarefa**: Clique no ícone de lixeira na linha da tarefa
+4. **Filtrar tarefas**:
+   - Digite no campo de busca para filtrar por título
+   - Selecione um ou mais status no dropdown
+   - Escolha um intervalo de datas no seletor de datas
